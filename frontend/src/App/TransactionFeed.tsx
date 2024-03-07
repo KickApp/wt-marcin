@@ -1,9 +1,19 @@
 import type { Transaction } from 'plaid';
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useGetTransactions } from '../hooks/useGetTransactions';
+import { Button } from '../components/Button';
 
 export const TransactionFeed: React.FC = () => {
-  const { data: transactions, error, isLoading } = useGetTransactions();
+  const {
+    data: transactions,
+    error,
+    isLoading,
+    mutate: mutateTransactions,
+  } = useGetTransactions();
+
+  const onRefresh = useCallback(() => {
+    mutateTransactions();
+  }, [mutateTransactions]);
 
   if (isLoading) {
     return <div>loading...</div>;
@@ -13,7 +23,10 @@ export const TransactionFeed: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto">
+    <div className="container mx-auto space-y-4">
+      <Button onClick={onRefresh} disabled={isLoading}>
+        Refresh
+      </Button>
       <ul className="space-y-4">
         {transactions.latest_transactions.map((t) => (
           <TransactionTile key={t.transaction_id} transaction={t} />

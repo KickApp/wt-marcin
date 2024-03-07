@@ -2,14 +2,14 @@
 
 This web-application project consists of two parts:
 
-1. back-end in Node.js (`/server`);
-2. front-end in React (`/client`).
+1. backend in Node.js (`/server`);
+2. frontend in React (`/fronted`).
 
 ## Running the project
 
-In order to run the project you need to open the front-end while having the back-end running at the same time.
+In order to run the project you need to open the frontend while having the backend running at the same time.
 
-### Running the back-end
+### Running the backend
 
 Prerequsites:
 
@@ -21,4 +21,17 @@ To run the server, navigate to `server/` directory and execute:
 npm install
 npm run build
 npm start
+```
+
+### Running the frontend
+
+Prerequsites:
+
+- Node.js v20.11.1
+
+To run the server, navigate to `frontend/` directory and execute:
+
+```
+npm install
+npm run preview
 ```

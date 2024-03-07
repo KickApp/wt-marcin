@@ -1,11 +1,14 @@
 import { useCallback } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
+import { useAppStore } from '../../hooks/useAppStore';
 
 export function PlaidLinkButton({ linkToken }: { linkToken: string }) {
+  const appStore = useAppStore();
+
   const { ready, open } = usePlaidLink({
     token: linkToken,
-    onSuccess() {},
+    onSuccess: appStore.setPublicToken,
   });
 
   const onButtonClick = useCallback(() => {

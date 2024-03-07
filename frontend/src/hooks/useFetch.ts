@@ -1,16 +1,11 @@
 import { useEffect, useState } from 'react';
 import { fetcher } from '../fetcher';
 
-type UseFetchReturnType<T> = {
+export function useFetch<T>(...[url, options]: Parameters<typeof fetcher>): {
   data: T | undefined;
   error: Error | undefined;
   isLoading: boolean;
-};
-
-export function useFetch<T>(
-  url: string,
-  options?: RequestInit
-): UseFetchReturnType<T> {
+} {
   const [data, setData] = useState<T | undefined>(undefined);
   const [error, setError] = useState<Error | undefined>(undefined);
   const [isLoading, setIsLoading] = useState<boolean>(true);

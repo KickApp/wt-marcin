@@ -3,7 +3,7 @@ import { Title } from '../../components/Title';
 import { useCreateLinkToken } from '../../hooks/useCreateLinkToken';
 import { PlaidLinkButton } from './PlaidLinkButton';
 
-export function LoginScreen() {
+export const Login: React.FC = () => {
   const createdLinkToken = useCreateLinkToken();
 
   if (createdLinkToken.isLoading) {
@@ -16,4 +16,4 @@ export function LoginScreen() {
       <PlaidLinkButton linkToken={createdLinkToken.data!.link_token} />
     </>
   );
-}
+};

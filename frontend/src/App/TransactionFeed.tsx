@@ -1,44 +1,51 @@
-import type { Transaction } from 'plaid';
+import type { AccountBase, Transaction } from 'plaid';
 import React, { useCallback } from 'react';
-import { useGetTransactions } from '../hooks/useGetTransactions';
 import { Button } from '../components/Button';
+import { useGetAccounts } from '../hooks/useGetAccounts';
+import { useGetTransactions } from '../hooks/useGetTransactions';
 
 export const TransactionFeed: React.FC = () => {
-  const {
-    data: transactions,
-    error,
-    isLoading,
-    mutate: mutateTransactions,
-  } = useGetTransactions();
+  const getTransactions = useGetTransactions();
+  const getAccounts = useGetAccounts();
 
   const onRefresh = useCallback(() => {
-    mutateTransactions();
-  }, [mutateTransactions]);
+    getTransactions.mutate();
+  }, [getTransactions]);
 
-  if (isLoading) {
+  if (getTransactions.isLoading || getAccounts.isLoading) {
     return <div>loading...</div>;
   }
-  if (error || !transactions) {
+
+  if (!getTransactions.data || !getAccounts.data) {
     return <div>failed to load</div>;
   }
 
   return (
     <div className="container mx-auto space-y-4">
-      <Button onClick={onRefresh} disabled={isLoading}>
+      <Button onClick={onRefresh} disabled={getTransactions.isLoading}>
         Refresh
       </Button>
       <ul className="space-y-4">
-        {transactions.latest_transactions.map((t) => (
-          <TransactionTile key={t.transaction_id} transaction={t} />
-        ))}
+        {getTransactions.data.latest_transactions.map((transaction) => {
+          const [account] = getAccounts.data!.accounts.filter(
+            (acc) => acc.account_id === transaction.account_id
+          );
+          return (
+            <TransactionTile
+              key={transaction.transaction_id}
+              {...{ transaction, account }}
+            />
+          );
+        })}
       </ul>
     </div>
   );
 };
 
-const TransactionTile: React.FC<{ transaction: Transaction }> = ({
-  transaction: t,
-}) => (
+const TransactionTile: React.FC<{
+  transaction: Transaction;
+  account: AccountBase;
+}> = ({ transaction: t, account }) => (
   <li
     key={t.transaction_id}
     className="flex items-center justify-between bg-white shadow-lg rounded-lg p-4"
@@ -58,9 +65,7 @@ const TransactionTile: React.FC<{ transaction: Transaction }> = ({
       <span className="text-lg font-semibold">
         {formatCurrency(t.amount!, t.iso_currency_code)}
       </span>
-      <span className="text-sm text-gray-500">
-        Acc#{t.account_id.slice(0, 8)}
-      </span>
+      <span className="text-sm text-gray-500">{account.name}</span>
     </div>
   </li>
 );

@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { SWRConfig } from 'swr';
-import { App } from './App';
+import { App } from './App/App';
 import { swrConfig } from './swrConfig';
 
 import './index.css';

@@ -2,7 +2,7 @@
 
 This web-application project consists of two parts:
 
-1. backend in Node.js (`/server`);
+1. backend in Node.js (`/backend`);
 2. frontend in React (`/fronted`).
 
 ## Running the project
@@ -15,7 +15,7 @@ Prerequsites:
 
 - Node.js v20.11.1
 
-To run the server, navigate to `server/` directory and execute:
+To run the server, navigate to `backend/` directory and execute:
 
 ```
 npm install

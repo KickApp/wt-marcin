@@ -10,6 +10,7 @@ export function errorHandler(
   res: Response,
   next: NextFunction
 ): void {
+  // console.error('!!', err);
   if (res.headersSent) {
     return next(err);
   }

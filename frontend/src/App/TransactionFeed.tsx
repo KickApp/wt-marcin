@@ -2,29 +2,36 @@ import type { AccountBase, Transaction } from 'plaid';
 import React, { useCallback } from 'react';
 import { Button } from '../components/Button';
 import { useGetAccounts } from '../hooks/useGetAccounts';
+import { useGetItem } from '../hooks/useGetItem';
 import { useGetTransactions } from '../hooks/useGetTransactions';
 
 export const TransactionFeed: React.FC = () => {
   const getTransactions = useGetTransactions();
   const getAccounts = useGetAccounts();
+  const getItem = useGetItem();
 
   const onRefresh = useCallback(() => {
     getTransactions.mutate();
   }, [getTransactions]);
 
-  if (getTransactions.isLoading || getAccounts.isLoading) {
+  if (getTransactions.isLoading || getAccounts.isLoading || getItem.isLoading) {
     return <div>loading...</div>;
   }
 
-  if (!getTransactions.data || !getAccounts.data) {
+  if (!getTransactions.data || !getAccounts.data || !getItem.data) {
     return <div>failed to load</div>;
   }
 
+  const { institution } = getItem.data;
+
   return (
     <div className="container mx-auto space-y-4">
-      <Button onClick={onRefresh} disabled={getTransactions.isLoading}>
-        Refresh
-      </Button>
+      <div className="flex items-center justify-between bg-white shadow-lg rounded-lg p-4">
+        <div className="text-xl">{institution.name}</div>
+        <Button onClick={onRefresh} className="font-normal">
+          Refresh transactions
+        </Button>
+      </div>
       <ul className="space-y-4">
         {getTransactions.data.latest_transactions.map((transaction) => {
           const [account] = getAccounts.data!.accounts.filter(

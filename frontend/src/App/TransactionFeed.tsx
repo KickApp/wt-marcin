@@ -98,7 +98,11 @@ const TransactionTile: React.FC<{
           className="w-10 h-10 rounded-full"
         />
         <div className="flex flex-col">
-          <span className="font-bold">{t.merchant_name ?? t.name}</span>
+          <span
+            className={`font-bold ${t.merchant_name ? '' : 'text-red-500'}`}
+          >
+            {t.merchant_name || t.name}
+          </span>
           <span className="text-sm text-gray-500">{t.datetime ?? t.date}</span>
         </div>
       </div>

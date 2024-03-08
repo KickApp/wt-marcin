@@ -1,6 +1,5 @@
-// read env vars from .env file
-require('dotenv').config();
-
+import bodyParser from 'body-parser';
+import cors from 'cors';
 import express from 'express';
 import {
   Configuration,
@@ -12,50 +11,33 @@ import {
 } from 'plaid';
 import util from 'util';
 import { envVars } from './envVars';
-// import { v4 as uuidv4 } from 'uuid';
-import bodyParser from 'body-parser';
-// import moment from 'moment';
-import cors from 'cors';
 import { errorHandler } from './errorHandler';
+import { fetchDescriptions } from './openai';
 
 // We store the access_token in memory - in production, store it in a secure
 // persistent data store
 let ACCESS_TOKEN: null | string = null;
 let PUBLIC_TOKEN: null | string = null;
 let ITEM_ID: null | string = null;
-let ACCOUNT_ID = null;
-// The payment_id is only relevant for the UK/EU Payment Initiation product.
-// We store the payment_id in memory - in production, store it in a secure
-// persistent data store along with the Payment metadata, such as userId .
-let PAYMENT_ID = null;
-// The transfer_id and authorization_id are only relevant for Transfer ACH product.
-// We store the transfer_id in memory - in production, store it in a secure
-// persistent data store
-let AUTHORIZATION_ID = null;
-let TRANSFER_ID = null;
 
-// Initialize the Plaid client
-// Find your API keys in the Dashboard (https://dashboard.plaid.com/account/keys)
-
+const clientName = 'Transaction Feed';
+const language = 'en';
+const countryCodes = [CountryCode.Us] as const;
 const products = [Products.Auth, Products.Transactions] as const;
 const optionalProducts = [Products.Liabilities] as const;
 
-const configuration = new Configuration({
-  basePath: PlaidEnvironments[envVars.PLAID_ENV],
-  baseOptions: {
-    headers: {
-      'PLAID-CLIENT-ID': envVars.PLAID_CLIENT_ID,
-      'PLAID-SECRET': envVars.PLAID_SECRET,
-      'Plaid-Version': '2020-09-14',
+const client = new PlaidApi(
+  new Configuration({
+    basePath: PlaidEnvironments[envVars.PLAID_ENV],
+    baseOptions: {
+      headers: {
+        'PLAID-CLIENT-ID': envVars.PLAID_CLIENT_ID,
+        'PLAID-SECRET': envVars.PLAID_SECRET,
+        'Plaid-Version': '2020-09-14',
+      },
     },
-  },
-});
-
-const countryCodes: CountryCode[] = [CountryCode.Us];
-
-const client = new PlaidApi(configuration);
-
-envVars;
+  })
+);
 
 // Create a new express application instance
 const app: express.Application = express();
@@ -86,11 +68,11 @@ app.post('/api/create_link_token', function (request, response, next) {
           // This should correspond to a unique id for the current user.
           client_user_id: 'user-id',
         },
-        client_name: 'Transaction Feed',
+        client_name: clientName,
         products: [...products],
         optional_products: [...optionalProducts],
-        country_codes: countryCodes,
-        language: 'en',
+        country_codes: [...countryCodes],
+        language,
         transactions: {
           days_requested: 730,
         },
@@ -99,7 +81,7 @@ app.post('/api/create_link_token', function (request, response, next) {
       const createTokenResponse = await client.linkTokenCreate(
         linkTokenCreateRequest
       );
-      prettyPrintResponse(createTokenResponse);
+      // prettyPrintResponse(createTokenResponse);
       response.json(createTokenResponse.data);
     })
     .catch(next);
@@ -115,7 +97,7 @@ app.post('/api/set_access_token', function (request, response, next) {
       const tokenResponse = await client.itemPublicTokenExchange({
         public_token: PUBLIC_TOKEN!,
       });
-      prettyPrintResponse(tokenResponse);
+      // prettyPrintResponse(tokenResponse);
       ACCESS_TOKEN = tokenResponse.data.access_token;
       ITEM_ID = tokenResponse.data.item_id;
       response.json({
@@ -144,7 +126,50 @@ app.get('/api/transactions2', function (request, response, next) {
       console.log('Got transactions', transactionsSyncResponse.data, {
         query: request.query,
       });
-      response.json(transactionsSyncResponse.data);
+
+      const { added } = transactionsSyncResponse.data;
+
+      const txsNeedDesc = added.filter((t) => t.merchant_name == null);
+      const prompt = `\
+Translate each bank statement description into a concise, readable description indicating the merchant or service and the transaction nature. No markers are used, just descriptions in the same order:
+
+${txsNeedDesc
+  .map((tx) =>
+    Object.entries({
+      Description: tx.original_description ?? tx.name,
+      Category: tx.personal_finance_category?.primary,
+      Detail: tx.personal_finance_category?.detailed,
+      Website: tx.website,
+      Channel: tx.payment_channel,
+    })
+      .map(([key, value]) => (value ? `${key}: ${value}` : ''))
+      .filter(Boolean)
+      .join(', ')
+  )
+  .join('\n')}`;
+
+      console.log(`SENDING PROMPT:\n\n${prompt}`);
+
+      const descriptions = await fetchDescriptions(prompt);
+
+      const data: typeof transactionsSyncResponse.data = {
+        ...transactionsSyncResponse.data,
+        added: added.map((tx) => {
+          const index = txsNeedDesc.indexOf(tx);
+          if (index === -1) {
+            return tx;
+          }
+
+          return {
+            ...tx,
+            name: descriptions[index],
+          };
+        }),
+      };
+
+      // TODO process transactions to add extra fields on them
+
+      response.json(data);
     })
     .catch(next);
 });
@@ -162,9 +187,9 @@ app.get('/api/item', function (request, response, next) {
       // Also pull information about the institution
       const instResponse = await client.institutionsGetById({
         institution_id: itemResponse.data.item.institution_id!,
-        country_codes: countryCodes,
+        country_codes: [...countryCodes],
       });
-      prettyPrintResponse(itemResponse);
+      // prettyPrintResponse(itemResponse);
       response.json({
         item: itemResponse.data.item,
         institution: instResponse.data.institution,
@@ -181,7 +206,7 @@ app.get('/api/accounts', function (request, response, next) {
       const accountsResponse = await client.accountsGet({
         access_token: ACCESS_TOKEN!,
       });
-      prettyPrintResponse(accountsResponse);
+      // prettyPrintResponse(accountsResponse);
       response.json(accountsResponse.data);
     })
     .catch(next);

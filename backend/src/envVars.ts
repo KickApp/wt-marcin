@@ -3,6 +3,8 @@ import { pipe } from 'fp-ts/function';
 import * as t from 'io-ts';
 import { PathReporter } from 'io-ts/PathReporter';
 
+require('dotenv').config(); // read env vars from .env file
+
 const stringToNumber = new t.Type<number, number, unknown>(
   'stringToNumber',
   t.number.is,
@@ -46,11 +48,13 @@ const EnvironmentVariables = t.type({
   PLAID_SECRET: nonEmptyString,
   PLAID_ENV: t.union([t.literal('sandbox'), t.literal('development')]),
   PLAID_REDIRECT_URI: t.union([t.undefined, t.string]),
+  OPENAI_API_KEY: nonEmptyString,
 });
 
 type EnvironmentVariables = t.TypeOf<typeof EnvironmentVariables>;
 
 const validatedEnv = EnvironmentVariables.decode(process.env);
+
 export const envVars = pipe(
   validatedEnv,
   E.getOrElseW(() => {

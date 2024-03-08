@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
-import { envVars } from './envVars';
 import { Transaction } from 'plaid';
+import { envVars } from './envVars';
 
 const openai = new OpenAI({
   apiKey: envVars.OPENAI_API_KEY,
@@ -44,8 +44,8 @@ ${txs
       throw new Error('!');
     }
 
-    console.log('Response\n', content);
     const descriptions = parseResponseAndRemoveLineNumbers(content);
+    console.log('Response\n', content, 'Parsed\n', descriptions);
     return descriptions;
   } catch (error) {
     console.error('Error fetching completion:', error);
@@ -57,7 +57,7 @@ function parseResponseAndRemoveLineNumbers(response: string) {
   // Removing line numbers using regex and splitting by newline
   const list = response
     .replace(/^\d+\.\s?/gm, '')
-    .split('\n')
+    .split(/\n+/)
     .map((item) => item.trim());
   return list;
 }

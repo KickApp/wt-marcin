@@ -2,10 +2,10 @@ import { type AccountBase, type Transaction } from 'plaid';
 import React, { useCallback } from 'react';
 import { Button } from '../components/Button';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { useAppStore } from '../hooks/useAppStore';
 import { useGetAccounts } from '../hooks/useGetAccounts';
 import { useGetItem } from '../hooks/useGetItem';
 import { useSyncTransactions } from '../hooks/useSyncTransactions';
-import { useAppStore } from '../hooks/useAppStore';
 
 export const TransactionFeed: React.FC = () => {
   const syncTransactions = useSyncTransactions();
@@ -42,11 +42,9 @@ export const TransactionFeed: React.FC = () => {
   const { accounts } = getAccounts.data;
   const { institution } = getItem.data;
 
-  // FIXME reduce taking into account the ids (don't add modified again)
-  const syncTransactionsData = syncTransactions.data.reduce((acc, page) => ({
-    ...acc,
-    added: [...acc.added, ...page.added],
-  }));
+  const added = ([] as Transaction[]).concat(
+    ...syncTransactions.data.map((page) => page.added)
+  );
 
   return (
     <div className="container mx-auto space-y-4">
@@ -65,7 +63,7 @@ export const TransactionFeed: React.FC = () => {
         </Button>
       </div>
       <ul className="space-y-4">
-        {syncTransactionsData.added.map((transaction) => {
+        {added.map((transaction) => {
           const [account] = accounts.filter(
             (acc) => acc.account_id === transaction.account_id
           );

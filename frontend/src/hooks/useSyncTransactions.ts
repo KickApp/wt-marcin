@@ -11,13 +11,13 @@ const getKey: SWRInfiniteKeyLoader<TransactionsSyncResponse> = (
   pageIndex,
   previousPageData
 ) => {
-  if (!previousPageData || pageIndex === 0) {
-    return url;
-  }
-
-  if (!previousPageData.has_more) {
+  if (previousPageData && !previousPageData.has_more) {
     return null;
   }
 
-  return `${url}?cursor=${encodeURIComponent(previousPageData.next_cursor)}`;
+  if (pageIndex === 0) {
+    return url;
+  }
+
+  return `${url}?cursor=${encodeURIComponent(previousPageData!.next_cursor)}`;
 };

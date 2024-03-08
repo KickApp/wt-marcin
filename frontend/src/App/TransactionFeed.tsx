@@ -19,6 +19,10 @@ export const TransactionFeed: React.FC = () => {
     syncTransactions.setSize(syncTransactions.size + 1);
   }, [syncTransactions]);
 
+  const onSelect = useCallback((transaction: Transaction) => {
+    console.log('selected transaction', transaction);
+  }, []);
+
   if (
     syncTransactions.isLoading ||
     getAccounts.isLoading ||
@@ -62,7 +66,7 @@ export const TransactionFeed: React.FC = () => {
           return (
             <TransactionTile
               key={transaction.transaction_id}
-              {...{ transaction, account }}
+              {...{ transaction, account, onSelect }}
             />
           );
         })}
@@ -78,30 +82,35 @@ export const TransactionFeed: React.FC = () => {
 const TransactionTile: React.FC<{
   transaction: Transaction;
   account: AccountBase;
-}> = ({ transaction: t, account }) => (
-  <li
-    key={t.transaction_id}
-    className="flex items-center justify-between bg-white shadow-lg rounded-lg p-4"
-  >
-    <div className="flex items-center space-x-4">
-      <img
-        src={t.logo_url ?? t.personal_finance_category_icon_url}
-        alt="Transaction Icon"
-        className="w-10 h-10 rounded-full"
-      />
-      <div className="flex flex-col">
-        <span className="font-bold">{t.merchant_name ?? t.name}</span>
-        <span className="text-sm text-gray-500">{t.datetime ?? t.date}</span>
+  onSelect: (transaction: Transaction) => void;
+}> = ({ transaction: t, account, onSelect }) => {
+  const onClick = useCallback(() => onSelect(t), [onSelect, t]);
+  return (
+    <li
+      key={t.transaction_id}
+      className="flex items-center justify-between bg-white shadow-lg rounded-lg p-4 hover:bg-gray-50 hover:shadow-xl cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="flex items-center space-x-4">
+        <img
+          src={t.logo_url ?? t.personal_finance_category_icon_url}
+          alt="Transaction Icon"
+          className="w-10 h-10 rounded-full"
+        />
+        <div className="flex flex-col">
+          <span className="font-bold">{t.merchant_name ?? t.name}</span>
+          <span className="text-sm text-gray-500">{t.datetime ?? t.date}</span>
+        </div>
       </div>
-    </div>
-    <div className="flex flex-col items-end">
-      <span className="text-lg font-semibold">
-        {formatCurrency(t.amount!, t.iso_currency_code)}
-      </span>
-      <span className="text-sm text-gray-500">{account.name}</span>
-    </div>
-  </li>
-);
+      <div className="flex flex-col items-end">
+        <span className="text-lg font-semibold">
+          {formatCurrency(t.amount!, t.iso_currency_code)}
+        </span>
+        <span className="text-sm text-gray-500">{account.name}</span>
+      </div>
+    </li>
+  );
+};
 
 function formatCurrency(
   number: number | null | undefined,

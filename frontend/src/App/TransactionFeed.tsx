@@ -1,30 +1,42 @@
-import type { AccountBase, Transaction } from 'plaid';
+import { type AccountBase, type Transaction } from 'plaid';
 import React, { useCallback } from 'react';
 import { Button } from '../components/Button';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useGetAccounts } from '../hooks/useGetAccounts';
 import { useGetItem } from '../hooks/useGetItem';
-import { useGetTransactions } from '../hooks/useGetTransactions';
+import { useSyncTransactions } from '../hooks/useSyncTransactions';
 
 export const TransactionFeed: React.FC = () => {
-  const getTransactions = useGetTransactions();
+  const syncTransactions = useSyncTransactions();
   const getAccounts = useGetAccounts();
   const getItem = useGetItem();
 
   const onRefresh = useCallback(() => {
-    getTransactions.mutate();
-  }, [getTransactions]);
+    syncTransactions.mutate();
+  }, [syncTransactions]);
 
-  if (getTransactions.isLoading || getAccounts.isLoading || getItem.isLoading) {
+  const onLoadMore = useCallback(() => {
+    syncTransactions.setSize(syncTransactions.size + 1);
+  }, [syncTransactions]);
+
+  if (
+    syncTransactions.isLoading ||
+    getAccounts.isLoading ||
+    getItem.isLoading
+  ) {
     return <LoadingSpinner />;
   }
 
-  if (!getTransactions.data || !getAccounts.data || !getItem.data) {
+  if (!syncTransactions.data || !getAccounts.data || !getItem.data) {
     return <div>failed to load</div>;
   }
 
   const { accounts } = getAccounts.data;
   const { institution } = getItem.data;
+  const syncTransactionsData = syncTransactions.data.reduce((acc, page) => ({
+    ...acc,
+    added: [...acc.added, ...page.added],
+  }));
 
   return (
     <div className="container mx-auto space-y-4">
@@ -43,7 +55,7 @@ export const TransactionFeed: React.FC = () => {
         </Button>
       </div>
       <ul className="space-y-4">
-        {getTransactions.data.latest_transactions.map((transaction) => {
+        {syncTransactionsData.added.map((transaction) => {
           const [account] = accounts.filter(
             (acc) => acc.account_id === transaction.account_id
           );
@@ -55,6 +67,10 @@ export const TransactionFeed: React.FC = () => {
           );
         })}
       </ul>
+      {/* TODO: detect scroll past the end of the screen automatically */}
+      <Button onClick={onLoadMore} className="font-normal w-full">
+        Load more
+      </Button>
     </div>
   );
 };

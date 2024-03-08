@@ -2,7 +2,7 @@ import type { AccountsGetResponse } from 'plaid';
 import { useCallback } from 'react';
 import useSWR, { mutate } from 'swr';
 
-const url: string = '/api/accounts';
+const url = '/api/accounts';
 
 export function useGetAccounts() {
   return {

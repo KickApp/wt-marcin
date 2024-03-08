@@ -1,7 +1,7 @@
 import type { TransactionsSyncResponse } from 'plaid';
 import useSWRInfinite, { SWRInfiniteKeyLoader } from 'swr/infinite';
 
-const url = '/api/transactions2';
+const url = '/api/transactions';
 
 export function useSyncTransactions() {
   return useSWRInfinite<TransactionsSyncResponse>(getKey);

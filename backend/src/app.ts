@@ -1,7 +1,8 @@
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import crypto from 'crypto';
-import express, { NextFunction } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
+import { IncomingMessage } from 'http';
 import {
   Configuration,
   CountryCode,
@@ -11,14 +12,9 @@ import {
   Products,
 } from 'plaid';
 import util from 'util';
+import { completeTransactionDescriptions } from './completeTransactionDescriptions';
 import { envVars } from './envVars';
 import { errorHandler } from './errorHandler';
-import { fetchDescriptions } from './openai';
-
-// We store the access_token in memory - in production, store it in a secure
-// persistent data store
-let ACCESS_TOKEN: null | string = null;
-let ITEM_ID: null | string = null;
 
 const clientName = 'Transaction Feed';
 const language = 'en';
@@ -52,31 +48,31 @@ app.use(cors());
 
 // Create a link token with configs which we can then use to initialize Plaid Link client-side.
 // See https://plaid.com/docs/#create-link-token
-app.post('/api/create_link_token', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const linkTokenCreateRequest: LinkTokenCreateRequest = {
-        user: {
-          // This should correspond to a unique id for the current user.
-          client_user_id: 'user-id',
-        },
-        client_name: clientName,
-        products: [...products],
-        optional_products: [...optionalProducts],
-        country_codes: [...countryCodes],
-        language,
-        transactions: {
-          days_requested: 730,
-        },
-        redirect_uri: envVars.PLAID_REDIRECT_URI || undefined,
-      };
-      const createTokenResponse = await client.linkTokenCreate(
-        linkTokenCreateRequest
-      );
-      // prettyPrintResponse(createTokenResponse);
-      response.json(createTokenResponse.data);
-    })
-    .catch(next);
+app.post('/api/create_link_token', async function (request, response, next) {
+  try {
+    const linkTokenCreateRequest: LinkTokenCreateRequest = {
+      user: {
+        // This should correspond to a unique id for the current user.
+        client_user_id: 'user-id',
+      },
+      client_name: clientName,
+      products: [...products],
+      optional_products: [...optionalProducts],
+      country_codes: [...countryCodes],
+      language,
+      transactions: {
+        days_requested: 730,
+      },
+      redirect_uri: envVars.PLAID_REDIRECT_URI,
+    };
+    const createTokenResponse = await client.linkTokenCreate(
+      linkTokenCreateRequest
+    );
+    // prettyPrintResponse(createTokenResponse);
+    response.json(createTokenResponse.data);
+  } catch (error) {
+    next(error);
+  }
 });
 
 const sessions: Map<
@@ -117,6 +113,111 @@ app.post('/api/set_access_token', async function (request, response, next) {
   }
 });
 
+function getSession(req: IncomingMessage) {
+  const sessionHeader = req.headers[SESSION_ID_HEADER_NAME.toLowerCase()];
+  const sessionId = sessionHeader ? String(sessionHeader) : '';
+  const session = sessions.get(sessionId);
+  if (!session) {
+    throw new Error('Missing session');
+  }
+  return session;
+}
+
+app.post('/api/info', function (request, response, next) {
+  const { accessToken, itemId } = getSession(request);
+  response.json({
+    access_token: accessToken,
+    item_id: itemId,
+    products,
+  });
+});
+
+app.get('/api/transactions', async function (request, response, next) {
+  try {
+    const { accessToken } = getSession(request);
+    const cursor = request.query.cursor;
+    const transactionsSyncResponse = await client.transactionsSync({
+      access_token: accessToken,
+      cursor: cursor ? String(cursor) : undefined,
+      count: 9,
+      options: {
+        include_original_description: true,
+      },
+    });
+
+    const { added } = transactionsSyncResponse.data;
+    const txsNeedDesc = added.filter((t) => t.merchant_name == null);
+    const descriptions = await completeTransactionDescriptions(txsNeedDesc);
+    const data: typeof transactionsSyncResponse.data = {
+      ...transactionsSyncResponse.data,
+      added: added.map((tx) => {
+        const index = txsNeedDesc.indexOf(tx);
+        if (index === -1) {
+          return tx;
+        }
+
+        return {
+          ...tx,
+          name: descriptions[index],
+        };
+      }),
+    };
+
+    response.json(data);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Retrieve information about an Item
+// https://plaid.com/docs/#retrieve-item
+app.get('/api/item', async function (request, response, next) {
+  try {
+    const { accessToken } = getSession(request);
+
+    // Pull the Item - this includes information about available products,
+    // billed products, webhook information, and more.
+    const itemResponse = await client.itemGet({
+      access_token: accessToken,
+    });
+    // Also pull information about the institution
+    const instResponse = await client.institutionsGetById({
+      institution_id: itemResponse.data.item.institution_id!,
+      country_codes: [...countryCodes],
+    });
+    prettyPrintResponse(itemResponse);
+    response.json({
+      item: itemResponse.data.item,
+      institution: instResponse.data.institution,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Retrieve an Item's accounts
+// https://plaid.com/docs/#accounts
+app.get('/api/accounts', async function (request, response, next) {
+  try {
+    const { accessToken } = getSession(request);
+    const accountsResponse = await client.accountsGet({
+      access_token: accessToken,
+    });
+    prettyPrintResponse(accountsResponse);
+    response.json(accountsResponse.data);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.use(logRequestHeaders);
+app.use(errorHandler);
+
+const port = envVars.APP_PORT;
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}/`);
+});
+
 // Function to generate a secure session ID token
 function generateSessionId(): string {
   // Generate a random buffer
@@ -128,140 +229,17 @@ function generateSessionId(): string {
   return sessionId;
 }
 
-function logRequestHeaders(req: Request, res: Response, next: NextFunction) {
-  console.log('Request Headers:', req.headers);
+function logRequestHeaders(
+  err: Error,
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  // console.log('Request Headers:', req.headers);
   next();
 }
 
-// Usage:
-app.use('/api', (req, res, next) => {
-  console.log('Request Headers:', req.headers);
-  const sessionHeader = req.headers[SESSION_ID_HEADER_NAME.toLowerCase()];
-  const sessionId = sessionHeader ? String(sessionHeader) : '';
-  console.log('middle', { sessionId });
-  const session = sessions.get(sessionId);
-  ACCESS_TOKEN = session?.accessToken ?? '';
-  ITEM_ID = session?.itemId ?? '';
-  next();
-});
-
-app.post('/api/info', function (request, response, next) {
-  response.json({
-    item_id: ITEM_ID,
-    access_token: ACCESS_TOKEN,
-    products,
-  });
-});
-
-app.get('/api/transactions2', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const cursor = request.query.cursor;
-      console.log('fetching more query', request.query, { cursor });
-      const transactionsSyncResponse = await client.transactionsSync({
-        access_token: ACCESS_TOKEN!,
-        cursor: cursor ? String(cursor) : undefined,
-        count: 9,
-        options: {
-          include_original_description: true,
-        },
-      });
-      console.log('Got transactions', transactionsSyncResponse.data, {
-        query: request.query,
-      });
-
-      const { added } = transactionsSyncResponse.data;
-
-      const txsNeedDesc = added.filter((t) => t.merchant_name == null);
-      const prompt = `\
-Translate each bank statement description into a concise, readable description indicating the merchant or service and the transaction nature. No markers are used, just descriptions in the same order and separated by exactly one newline character.
-
-${txsNeedDesc
-  .map((tx) =>
-    Object.entries({
-      Description: tx.original_description ?? tx.name,
-      Category: tx.personal_finance_category?.primary,
-      Detail: tx.personal_finance_category?.detailed,
-      Website: tx.website,
-      Channel: tx.payment_channel,
-    })
-      .map(([key, value]) => (value ? `${key}: ${value}` : ''))
-      .filter(Boolean)
-      .join(', ')
-  )
-  .join('\n')}`;
-
-      console.log(`SENDING PROMPT:\n\n${prompt}`);
-
-      const descriptions = await fetchDescriptions(prompt);
-
-      const data: typeof transactionsSyncResponse.data = {
-        ...transactionsSyncResponse.data,
-        added: added.map((tx) => {
-          const index = txsNeedDesc.indexOf(tx);
-          if (index === -1) {
-            return tx;
-          }
-
-          return {
-            ...tx,
-            name: descriptions[index],
-          };
-        }),
-      };
-
-      // TODO process transactions to add extra fields on them
-
-      response.json(data);
-    })
-    .catch(next);
-});
-
-// Retrieve information about an Item
-// https://plaid.com/docs/#retrieve-item
-app.get('/api/item', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      // Pull the Item - this includes information about available products,
-      // billed products, webhook information, and more.
-      const itemResponse = await client.itemGet({
-        access_token: ACCESS_TOKEN!,
-      });
-      // Also pull information about the institution
-      const instResponse = await client.institutionsGetById({
-        institution_id: itemResponse.data.item.institution_id!,
-        country_codes: [...countryCodes],
-      });
-      // prettyPrintResponse(itemResponse);
-      response.json({
-        item: itemResponse.data.item,
-        institution: instResponse.data.institution,
-      });
-    })
-    .catch(next);
-});
-
-// Retrieve an Item's accounts
-// https://plaid.com/docs/#accounts
-app.get('/api/accounts', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const accountsResponse = await client.accountsGet({
-        access_token: ACCESS_TOKEN!,
-      });
-      // prettyPrintResponse(accountsResponse);
-      response.json(accountsResponse.data);
-    })
-    .catch(next);
-});
-
-app.use(errorHandler);
-
-const port = envVars.APP_PORT;
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}/`);
-});
-
 const prettyPrintResponse = (response: { data: unknown }) => {
-  console.log(util.inspect(response.data, { colors: true, depth: 4 }));
+  util;
+  // console.log(util.inspect(response.data, { colors: true, depth: 4 }));
 };

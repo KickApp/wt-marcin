@@ -23,15 +23,10 @@ export async function fetcher(
       }),
     },
   });
-  console.log(0, response);
-  console.log(0, 'headers', response.headers);
   sessionId =
     sessionId ??
     response.headers.get(SESSION_ID_HEADER_NAME) ??
     response.headers.get('X-Session-Id');
-  console.log('receiving', input, [...response.headers.values()], {
-    sessionId,
-  });
   return response;
 }
 

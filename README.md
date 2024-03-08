@@ -23,6 +23,14 @@ npm run build
 npm start
 ```
 
+NOTE: Correct environment variables need to be setup in `backend/.env`. See `/backend/.env.example` for an example.
+
+For development mode with hot reload you can run:
+
+```
+npm run dev
+```
+
 ### Running the frontend
 
 Prerequsites:
@@ -33,5 +41,12 @@ To run the server, navigate to `frontend/` directory and execute:
 
 ```
 npm install
+npm run build
 npm run preview
+```
+
+For development mode with hot reload you can run:
+
+```
+npm run dev
 ```

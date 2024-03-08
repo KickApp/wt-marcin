@@ -23,10 +23,7 @@ export const TransactionFeed: React.FC = () => {
   const showTransaction = useAppStore((store) => store.showTransaction);
 
   const onSelect = useCallback(
-    (transaction: Transaction) => {
-      console.log('selected transaction', transaction);
-      showTransaction(transaction);
-    },
+    (transaction: Transaction) => showTransaction(transaction),
     [showTransaction]
   );
 

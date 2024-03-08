@@ -1,6 +1,7 @@
 import bodyParser from 'body-parser';
 import cors from 'cors';
-import express from 'express';
+import crypto from 'crypto';
+import express, { NextFunction } from 'express';
 import {
   Configuration,
   CountryCode,
@@ -17,7 +18,6 @@ import { fetchDescriptions } from './openai';
 // We store the access_token in memory - in production, store it in a secure
 // persistent data store
 let ACCESS_TOKEN: null | string = null;
-let PUBLIC_TOKEN: null | string = null;
 let ITEM_ID: null | string = null;
 
 const clientName = 'Transaction Feed';
@@ -50,14 +50,6 @@ app.use(
 app.use(bodyParser.json());
 app.use(cors());
 
-app.post('/api/info', function (request, response, next) {
-  response.json({
-    item_id: ITEM_ID,
-    access_token: ACCESS_TOKEN,
-    products,
-  });
-});
-
 // Create a link token with configs which we can then use to initialize Plaid Link client-side.
 // See https://plaid.com/docs/#create-link-token
 app.post('/api/create_link_token', function (request, response, next) {
@@ -87,27 +79,78 @@ app.post('/api/create_link_token', function (request, response, next) {
     .catch(next);
 });
 
+const sessions: Map<
+  string,
+  {
+    accessToken: string;
+    itemId: string;
+  }
+> = new Map();
+
+const SESSION_ID_HEADER_NAME = 'X-Session-ID';
+
 // Exchange token flow - exchange a Link public_token for
 // an API access_token
 // https://plaid.com/docs/#exchange-token-flow
-app.post('/api/set_access_token', function (request, response, next) {
-  PUBLIC_TOKEN = request.body.public_token;
-  Promise.resolve()
-    .then(async function () {
-      const tokenResponse = await client.itemPublicTokenExchange({
-        public_token: PUBLIC_TOKEN!,
-      });
-      // prettyPrintResponse(tokenResponse);
-      ACCESS_TOKEN = tokenResponse.data.access_token;
-      ITEM_ID = tokenResponse.data.item_id;
-      response.json({
-        // the 'access_token' is a private token, DO NOT pass this token to the frontend in your production environment
-        access_token: ACCESS_TOKEN,
-        item_id: ITEM_ID,
-        error: null,
-      });
-    })
-    .catch(next);
+app.post('/api/set_access_token', async function (request, response, next) {
+  try {
+    const PUBLIC_TOKEN = request.body.public_token;
+    const tokenResponse = await client.itemPublicTokenExchange({
+      public_token: PUBLIC_TOKEN!,
+    });
+
+    const accessToken = tokenResponse.data.access_token;
+    const itemId = tokenResponse.data.item_id;
+    const sessionId = generateSessionId();
+
+    response.setHeader(SESSION_ID_HEADER_NAME, sessionId);
+    sessions.set(sessionId, {
+      accessToken,
+      itemId,
+    });
+
+    response.json({
+      itemId,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Function to generate a secure session ID token
+function generateSessionId(): string {
+  // Generate a random buffer
+  const randomBuffer = crypto.randomBytes(32);
+
+  // Convert buffer to a hexadecimal string
+  const sessionId = randomBuffer.toString('hex');
+
+  return sessionId;
+}
+
+function logRequestHeaders(req: Request, res: Response, next: NextFunction) {
+  console.log('Request Headers:', req.headers);
+  next();
+}
+
+// Usage:
+app.use('/api', (req, res, next) => {
+  console.log('Request Headers:', req.headers);
+  const sessionHeader = req.headers[SESSION_ID_HEADER_NAME.toLowerCase()];
+  const sessionId = sessionHeader ? String(sessionHeader) : '';
+  console.log('middle', { sessionId });
+  const session = sessions.get(sessionId);
+  ACCESS_TOKEN = session?.accessToken ?? '';
+  ITEM_ID = session?.itemId ?? '';
+  next();
+});
+
+app.post('/api/info', function (request, response, next) {
+  response.json({
+    item_id: ITEM_ID,
+    access_token: ACCESS_TOKEN,
+    products,
+  });
 });
 
 app.get('/api/transactions2', function (request, response, next) {
@@ -131,7 +174,7 @@ app.get('/api/transactions2', function (request, response, next) {
 
       const txsNeedDesc = added.filter((t) => t.merchant_name == null);
       const prompt = `\
-Translate each bank statement description into a concise, readable description indicating the merchant or service and the transaction nature. No markers are used, just descriptions in the same order:
+Translate each bank statement description into a concise, readable description indicating the merchant or service and the transaction nature. No markers are used, just descriptions in the same order and separated by exactly one newline character.
 
 ${txsNeedDesc
   .map((tx) =>

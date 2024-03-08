@@ -1,17 +1,39 @@
+const SESSION_ID_HEADER_NAME = 'X-Session-ID';
+
 interface ExtraOptions {
   postData?: Record<string, undefined | string>;
 }
 
-export const fetcher = (
+let sessionId: null | string = null;
+
+export async function fetcher(
   input: string,
   initWithExtraOptions: RequestInit & ExtraOptions = {}
-): Promise<Response> => {
+): Promise<Response> {
   const init: RequestInit = extraOptionsReducers.reduce(
     (acc, reducer) => reducer(acc) ?? acc,
     initWithExtraOptions
   );
-  return fetch(`${baseUrl}${input}`, init);
-};
+  const response = await fetch(`${baseUrl}${input}`, {
+    ...init,
+    headers: {
+      ...init.headers,
+      ...(sessionId && {
+        [SESSION_ID_HEADER_NAME]: sessionId,
+      }),
+    },
+  });
+  console.log(0, response);
+  console.log(0, 'headers', response.headers);
+  sessionId =
+    sessionId ??
+    response.headers.get(SESSION_ID_HEADER_NAME) ??
+    response.headers.get('X-Session-Id');
+  console.log('receiving', input, [...response.headers.values()], {
+    sessionId,
+  });
+  return response;
+}
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
 

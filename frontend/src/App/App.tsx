@@ -3,6 +3,7 @@ import { ScreenName, useAppStore } from '../hooks/useAppStore';
 import { Login } from './Login/Login';
 import { TokenExchange } from './TokenExchange';
 import { TransactionFeed } from './TransactionFeed';
+import { TransactionDetails } from './TransactionDetails';
 
 export function App() {
   const screeName = useAppStore((store) => store.screeName);
@@ -20,4 +21,5 @@ const screens: Record<ScreenName, React.FunctionComponent> = {
   Login,
   TokenExchange,
   TransactionFeed,
+  TransactionDetails,
 };

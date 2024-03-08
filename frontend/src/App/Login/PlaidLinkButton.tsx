@@ -20,5 +20,9 @@ export function PlaidLinkButton({ linkToken }: { linkToken: string }) {
     return <LoadingSpinner />;
   }
 
-  return <Button onClick={onButtonClick}>Login</Button>;
+  return (
+    <Button onClick={onButtonClick} className="w-full font-normal">
+      Connect your account via Plaid
+    </Button>
+  );
 }

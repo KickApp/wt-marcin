@@ -5,6 +5,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useGetAccounts } from '../hooks/useGetAccounts';
 import { useGetItem } from '../hooks/useGetItem';
 import { useSyncTransactions } from '../hooks/useSyncTransactions';
+import { useAppStore } from '../hooks/useAppStore';
 
 export const TransactionFeed: React.FC = () => {
   const syncTransactions = useSyncTransactions();
@@ -19,9 +20,15 @@ export const TransactionFeed: React.FC = () => {
     syncTransactions.setSize(syncTransactions.size + 1);
   }, [syncTransactions]);
 
-  const onSelect = useCallback((transaction: Transaction) => {
-    console.log('selected transaction', transaction);
-  }, []);
+  const showTransaction = useAppStore((store) => store.showTransaction);
+
+  const onSelect = useCallback(
+    (transaction: Transaction) => {
+      console.log('selected transaction', transaction);
+      showTransaction(transaction);
+    },
+    [showTransaction]
+  );
 
   if (
     syncTransactions.isLoading ||
@@ -37,6 +44,8 @@ export const TransactionFeed: React.FC = () => {
 
   const { accounts } = getAccounts.data;
   const { institution } = getItem.data;
+
+  // FIXME reduce taking into account the ids (don't add modified again)
   const syncTransactionsData = syncTransactions.data.reduce((acc, page) => ({
     ...acc,
     added: [...acc.added, ...page.added],

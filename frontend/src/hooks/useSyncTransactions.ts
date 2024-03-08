@@ -19,5 +19,5 @@ const getKey: SWRInfiniteKeyLoader<TransactionsSyncResponse> = (
     return null;
   }
 
-  return `${url}?cursor=${previousPageData.next_cursor}`;
+  return `${url}?cursor=${encodeURIComponent(previousPageData.next_cursor)}`;
 };
